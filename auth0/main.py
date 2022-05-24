@@ -6,7 +6,8 @@ from urllib.parse import quote_plus, urlencode
 from authlib.integrations.flask_client import OAuth
 from dotenv import find_dotenv, load_dotenv
 from flask import Flask, redirect, render_template, session, url_for
-
+from flask import request
+import requests
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -30,7 +31,6 @@ oauth.register(
 
 
 
-
 @app.route("/login")
 def login():
     return oauth.auth0.authorize_redirect(
@@ -40,6 +40,11 @@ def login():
 @app.route("/callback", methods=["GET", "POST"])
 def callback():
     token = oauth.auth0.authorize_access_token()
+    data = {
+        "name":token["userinfo"]["email"],
+        "sub": token["userinfo"]["sub"]
+    }
+    res = requests.post('http://127.0.0.1:8080/users', json=data)
     session["user"] = token
     return redirect("/")
 
@@ -64,6 +69,7 @@ def logout():
 
 @app.route("/")
 def home():
+   
     return render_template("home.html", session=session.get('user'), pretty=json.dumps(session.get('user'), indent=4))
 
 

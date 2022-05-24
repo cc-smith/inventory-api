@@ -23,10 +23,6 @@ from flask import url_for
 from authlib.integrations.flask_client import OAuth
 from urllib.parse import urlencode
 
-app = Flask(__name__)
-app.register_blueprint(user.bp)
-app.register_blueprint(store.bp)
-app.register_blueprint(item.bp)
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -34,9 +30,10 @@ if ENV_FILE:
 
 app = Flask(__name__)
 app.secret_key = env.get("APP_SECRET_KEY")
-
+app.register_blueprint(user.bp)
+app.register_blueprint(store.bp)
+app.register_blueprint(item.bp)
 client = datastore.Client()
-
 
 # Update the values of the following 3 variables
 CLIENT_ID = env.get("CLIENT_ID")
@@ -69,6 +66,13 @@ def handle_auth_error(ex):
     response = jsonify(ex.error)
     response.status_code = ex.status_code
     return response
+
+
+
+
+
+
+
 
 # Verify the JWT in the request's Authorization header
 def verify_jwt(request):
@@ -130,11 +134,12 @@ def verify_jwt(request):
                                 "Unable to parse authentication"
                                 " token."}, 401)
 
-        return payload
+        return request.get_json()
     else:
         raise AuthError({"code": "no_rsa_key",
                             "description":
                                 "No RSA key in JWKS"}, 401)
+
 
 
 @app.route('/')
@@ -153,7 +158,7 @@ def index():
 #             client.put(new_boat)
 #             return jsonify(id=new_boat.key.id), 201
 #         except:
-#             return '', 401
+            # return '', 401
         
 
 # @app.route('/boats', methods=['GET'])
@@ -208,10 +213,10 @@ def index():
 #         return jsonify(error='Method not recogonized')
 
 # Decode the JWT supplied in the Authorization header
-@app.route('/decode', methods=['GET'])
-def decode_jwt():
-    payload = verify_jwt(request)
-    return payload          
+# @app.route('/decode', methods=['GET'])
+# def decode_jwt():
+#     payload = verify_jwt(request)
+#     return payload          
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)

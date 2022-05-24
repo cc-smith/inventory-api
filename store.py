@@ -2,37 +2,44 @@ from flask import Blueprint, request
 from google.cloud import datastore
 import json
 import constants
+# from main import verify_jwt
+
 client = datastore.Client()
 
 bp = Blueprint('store', __name__, url_prefix='/stores')
 
-env = ''
+env = 'dev'
 
 if env == 'dev':
     store_url = 'http://127.0.0.1:8080/stores/'
     item_url = 'http://127.0.0.1:8080/items/'
 else:
-    store_url = 'https://hw4-smitchr8.uc.r.appspot.com/stores/'
-    item_url = 'https://hw4-smitchr8.uc.r.appspot.com/items/'
+    store_url = 'https://inventory-api-350817.uc.r.appspot.com/stores/'
+    item_url = 'https://inventory-api-350817.uc.r.appspot.com/items/'
     
 #Get all stores and add a new store
 @bp.route('', methods=['POST', 'GET'])
 def stores_get_post():
+    # verify the token and get the requiest body
+    # content = verify_jwt(request)
+    content = request.get_json();
     # Add a new store
     if request.method == 'POST':
-        content = request.get_json()
         # error, not enough attributes for store
         if len(content) < 3:
             error_message = {
                 "Error": "The request object is missing at least one of the required attributes"
             }
             return error_message, 400
+            
         # add new store
         new_store = datastore.entity.Entity(key=client.key(constants.stores))
         new_store.update(
             {"name": content["name"],
              "type": content["type"],
-             "length": content["length"],
+             "location": content["location"],
+             "creation_date": content["creation_date"],
+             "last_modified_date": content["last_modified_date"],
              "items": [],
              })
         client.put(new_store)

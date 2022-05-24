@@ -8,12 +8,12 @@ client = datastore.Client()
 
 bp = Blueprint('item', __name__, url_prefix='/items')
 
-env = ''
+env = 'dev'
 
 if env == 'dev':
     url = 'http://127.0.0.1:8080/items/'
 else:
-    url = 'https://hw4-smitchr8.uc.r.appspot.com/items/'
+    url = 'https://inventory-api-350817.uc.r.appspot.com/items/'
 
 @bp.route('', methods=['POST', 'GET'])
 def items_get_post():
@@ -30,10 +30,13 @@ def items_get_post():
             new_item = datastore.entity.Entity(key=client.key(constants.items))
             new_item.update(
                 {
-                    "volume": content["volume"],
-                    "item":  content["item"],
-                    "creation_date":  content["creation_date"],
-                    "carrier":  None
+                    "name": content["name"],
+                    "quantity": content["quantity"],
+                    "price":  content["price"],
+                    "category":  content["category"],
+                    "creation_date": content["creation_date"],
+                     "last_modified_date": content["last_modified_date"],
+                    "store:": content["store"]
                 }
             )
             client.put(new_item)
