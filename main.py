@@ -1,3 +1,4 @@
+import logging
 from google.cloud import datastore
 from flask import Flask, request, jsonify, _request_ctx_stack
 import requests
@@ -69,13 +70,9 @@ def handle_auth_error(ex):
 
 
 
-
-
-
-
-
 # Verify the JWT in the request's Authorization header
 def verify_jwt(request):
+    logging.debug(request)
     if 'Authorization' in request.headers:
         auth_header = request.headers['Authorization'].split()
         token = auth_header[1]
@@ -88,7 +85,6 @@ def verify_jwt(request):
     jwks = json.loads(jsonurl.read())
     try:
         unverified_header = jwt.get_unverified_header(token)
-        print("************UNVERIFIED_HDR", unverified_header)
     except jwt.JWTError:
         raise AuthError({"code": "invalid_header",
                         "description":
@@ -134,7 +130,7 @@ def verify_jwt(request):
                                 "Unable to parse authentication"
                                 " token."}, 401)
 
-        return request.get_json()
+        return payload
     else:
         raise AuthError({"code": "no_rsa_key",
                             "description":

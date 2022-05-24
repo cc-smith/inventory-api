@@ -30,7 +30,6 @@ oauth.register(
 )
 
 
-
 @app.route("/login")
 def login():
     return oauth.auth0.authorize_redirect(
@@ -40,6 +39,8 @@ def login():
 @app.route("/callback", methods=["GET", "POST"])
 def callback():
     token = oauth.auth0.authorize_access_token()
+    
+    # Send user data to be stored in DataStore
     data = {
         "name":token["userinfo"]["email"],
         "sub": token["userinfo"]["sub"]
@@ -47,9 +48,6 @@ def callback():
     res = requests.post('http://127.0.0.1:8080/users', json=data)
     session["user"] = token
     return redirect("/")
-
-
-# 👆 We're continuing from the steps above. Append this to your server.py file.
 
 @app.route("/logout")
 def logout():
@@ -69,7 +67,6 @@ def logout():
 
 @app.route("/")
 def home():
-   
     return render_template("home.html", session=session.get('user'), pretty=json.dumps(session.get('user'), indent=4))
 
 

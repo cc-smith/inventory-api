@@ -1,13 +1,13 @@
+import datetime
+
 from flask import Blueprint, request
 from google.cloud import datastore
 import json
 import constants
-# from main import verify_jwt
-
 client = datastore.Client()
 
 bp = Blueprint('store', __name__, url_prefix='/stores')
-
+from main import app, verify_jwt
 env = 'dev'
 
 if env == 'dev':
@@ -20,28 +20,36 @@ else:
 #Get all stores and add a new store
 @bp.route('', methods=['POST', 'GET'])
 def stores_get_post():
-    # verify the token and get the requiest body
-    # content = verify_jwt(request)
+    # verify the token and get the request body
+    # try:
+    jwt_payload = verify_jwt(request)
     content = request.get_json();
+    # except: 
+        # return 'Invalid token!', 400
+
     # Add a new store
     if request.method == 'POST':
         # error, not enough attributes for store
-        if len(content) < 3:
-            error_message = {
-                "Error": "The request object is missing at least one of the required attributes"
-            }
-            return error_message, 400
-            
+        # if len(content) < 3:
+        #     error_message = {
+        #         "Error": "The request object is missing at least one of the required attributes"
+        #     }
+        #     return error_message, 400
+        creation_date =  str(datetime.datetime.now())
         # add new store
         new_store = datastore.entity.Entity(key=client.key(constants.stores))
         new_store.update(
-            {"name": content["name"],
-             "type": content["type"],
-             "location": content["location"],
-             "creation_date": content["creation_date"],
-             "last_modified_date": content["last_modified_date"],
-             "items": [],
-             })
+            {
+                "name": content["name"],
+                "type": content["type"],
+                "location": content["location"],
+                "creation_date": creation_date,
+                "last_modified_date": None,
+                "items": [],
+                "owner": jwt_payload["sub"],
+                "owner_email": jwt_payload["email"]
+            }
+        )
         client.put(new_store)
 
         # return the new store object

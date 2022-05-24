@@ -21,7 +21,6 @@ def get_users():
 
     elif request.method == 'POST':
         content = request.get_json(force=True)
-        
         # check if user already exists
         query = client.query(kind=constants.users)
         query.add_filter("sub", "=", content['sub'])
