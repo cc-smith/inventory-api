@@ -1,12 +1,13 @@
+import datetime
+
 from flask import Blueprint, request
 from google.cloud import datastore
 import json
-from json2html import *
 import constants
-
 client = datastore.Client()
-
+# from routes import verifyJWT
 bp = Blueprint('item', __name__, url_prefix='/items')
+
 
 env = 'dev'
 
@@ -17,36 +18,35 @@ else:
 
 @bp.route('', methods=['POST', 'GET'])
 def items_get_post():
-    # Create a item
+        # verify the token
+    # try:
+    #     jwt_payload = verifyJWT.verify_jwt(request)
+    # except: 
+    #     return 'Invalid token!', 400
+    # Add an item
     if request.method == 'POST':
+        now = str(datetime.datetime.now())
         content = request.get_json()
-        # error: missing attributes
-        if len(content) < 3:
-            error_message = {
-                "Error": "The request object is missing at least one of the required attributes"}
-            return error_message, 400
-        # add the item
-        else:
-            new_item = datastore.entity.Entity(key=client.key(constants.items))
-            new_item.update(
-                {
-                    "name": content["name"],
-                    "quantity": content["quantity"],
-                    "price":  content["price"],
-                    "category":  content["category"],
-                    "creation_date": content["creation_date"],
-                     "last_modified_date": content["last_modified_date"],
-                    "store:": content["store"]
-                }
-            )
-            client.put(new_item)
+        new_item = datastore.entity.Entity(key=client.key(constants.items))
+        new_item.update(
+            {
+                "name": content["name"],
+                "quantity": content["quantity"],
+                "price":  content["price"],
+                "category":  content["category"],
+                "creation_date": now,
+                "last_modified_date": now,
+                "store:": content["store"]
+            }
+        )
+        client.put(new_item)
 
-            # return the new item object
-            item_key = client.key(constants.items, new_item.key.id)
-            item = client.get(key=item_key)
-            new_item["id"] = new_item.key.id
-            new_item["self"] = url + str(new_item.key.id)
-            return json.dumps(new_item), 201
+        # return the new item object
+        item_key = client.key(constants.items, new_item.key.id)
+        item = client.get(key=item_key)
+        new_item["id"] = new_item.key.id
+        new_item["self"] = url + str(new_item.key.id)
+        return json.dumps(new_item), 201
 
     # Get all items
     elif request.method == 'GET':

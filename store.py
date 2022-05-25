@@ -5,9 +5,9 @@ from google.cloud import datastore
 import json
 import constants
 client = datastore.Client()
+# from routes import verifyJWT
 
 bp = Blueprint('store', __name__, url_prefix='/stores')
-from main import app, verify_jwt
 env = 'dev'
 
 if env == 'dev':
@@ -20,34 +20,29 @@ else:
 #Get all stores and add a new store
 @bp.route('', methods=['POST', 'GET'])
 def stores_get_post():
-    # verify the token and get the request body
+    # verify the token
     # try:
-    jwt_payload = verify_jwt(request)
-    content = request.get_json();
+    #     jwt_payload = verifyJWT.verify_jwt(request)
     # except: 
-        # return 'Invalid token!', 400
+    #     return 'Invalid token!', 400
 
     # Add a new store
     if request.method == 'POST':
-        # error, not enough attributes for store
-        # if len(content) < 3:
-        #     error_message = {
-        #         "Error": "The request object is missing at least one of the required attributes"
-        #     }
-        #     return error_message, 400
-        creation_date =  str(datetime.datetime.now())
         # add new store
+        
+        content = request.get_json();
+        now = str(datetime.datetime.now())
         new_store = datastore.entity.Entity(key=client.key(constants.stores))
         new_store.update(
             {
                 "name": content["name"],
                 "type": content["type"],
                 "location": content["location"],
-                "creation_date": creation_date,
-                "last_modified_date": None,
+                "creation_date": now,
+                "last_modified_date": now,
                 "items": [],
-                "owner": jwt_payload["sub"],
-                "owner_email": jwt_payload["email"]
+                # "owner": jwt_payload["sub"],
+                # "owner_email": jwt_payload["email"]
             }
         )
         client.put(new_store)

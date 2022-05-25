@@ -1,4 +1,3 @@
-import logging
 from google.cloud import datastore
 from flask import Flask, request, jsonify, _request_ctx_stack
 import requests
@@ -32,8 +31,8 @@ if ENV_FILE:
 app = Flask(__name__)
 app.secret_key = env.get("APP_SECRET_KEY")
 app.register_blueprint(user.bp)
-app.register_blueprint(store.bp)
 app.register_blueprint(item.bp)
+app.register_blueprint(store.bp)
 client = datastore.Client()
 
 # Update the values of the following 3 variables
@@ -71,8 +70,17 @@ def handle_auth_error(ex):
 
 
 # Verify the JWT in the request's Authorization header
-def verify_jwt(request):
-    logging.debug(request)
+@app.before_request
+def verify_jwt():
+    # Default this to whatever you'd like.
+    require_auth = True
+
+    # You can handle 404s differently here if you'd like.
+    if request.endpoint in app.view_functions:
+        view_func = app.view_functions[request.endpoint]
+        require_auth = not hasattr(view_func, '_exclude_from_auth')
+        return
+
     if 'Authorization' in request.headers:
         auth_header = request.headers['Authorization'].split()
         token = auth_header[1]
@@ -141,78 +149,6 @@ def verify_jwt(request):
 @app.route('/')
 def index():
     return "Please navigate to /boats to use this API"
-# Create a lodging if the Authorization header contains a valid JWT
-# @app.route('/boats', methods=['POST'])
-# def boats_post():
-#     if request.method == 'POST':
-#         try:
-#             payload = verify_jwt(request)
-#             content = request.get_json()
-#             new_boat = datastore.entity.Entity(key=client.key("boats"))
-#             new_boat.update({"name": content["name"], "type": content["type"],
-#             "length": content["length"], "public": content["public"], "owner": payload["sub"]})
-#             client.put(new_boat)
-#             return jsonify(id=new_boat.key.id), 201
-#         except:
-            # return '', 401
-        
-
-# @app.route('/boats', methods=['GET'])
-# def boats_get():
-#     if request.method == 'GET':
-#         query = client.query(kind='boats')
-#         try:
-#             payload = verify_jwt(request)
-#             owner = payload["sub"]
-#             query.add_filter("owner", "=", owner)
-#             results = list(query.fetch())
-#             for e in results:
-#                 e["id"] = e.key.id
-#             return json.dumps(results), 200
-#         except:
-#             query.add_filter("public", "=", True)
-#             results = list(query.fetch())
-#             for e in results:
-#                 e["id"] = e.key.id
-#             return json.dumps(results), 200
-
-# @app.route('/owners/<owner_id>/boats', methods=['GET'])
-# def owners_get(owner_id):
-#     if request.method == 'GET':
-#         query = client.query(kind='boats')
-#         query.add_filter("owner", "=", str(owner_id))
-#         query.add_filter("public", "=", True)
-#         results = list(query.fetch())
-#         for e in results:
-#             e["id"] = e.key.id
-#         return json.dumps(results), 200
-#     else:
-#         return jsonify(error='Method not recogonized')
-
-# @app.route('/boats/<boat_id>', methods=['DELETE'])
-# def boats_delete(boat_id):
-#     if request.method == 'DELETE':
-#         try:
-#             payload = verify_jwt(request)
-#             owner = payload["sub"]
-#             key = client.key('boats', int(boat_id))
-#             boat = client.get(key=key)
-#             if boat and boat["owner"] == owner:
-#                 client.delete(key)
-#                 return '', 204
-#             else:
-#                 return '', 403
-#         except:
-#             return '', 401
-
-#     else:
-#         return jsonify(error='Method not recogonized')
-
-# Decode the JWT supplied in the Authorization header
-# @app.route('/decode', methods=['GET'])
-# def decode_jwt():
-#     payload = verify_jwt(request)
-#     return payload          
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8080, debug=True)

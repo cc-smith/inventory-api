@@ -8,8 +8,13 @@ client = datastore.Client()
 from os import environ as env
 
 bp = Blueprint('user', __name__, url_prefix='/users')
+# excludes route form jwt verification
+def exclude_from_auth(func):
+    func._exclude_from_auth = True
+    return func
 
 @bp.route('', methods=['GET', 'POST'])
+@exclude_from_auth  # do not require jwt verification for this route
 def get_users():
     # verify the token and get the requiest body
     if request.method == 'GET':
