@@ -1,15 +1,16 @@
 import datetime
-
 from flask import Blueprint, request
 from google.cloud import datastore
 import json
-import constants
-client = datastore.Client()
+from . import constants
+from .fetchedResults import FetchedResults
+from .verify_jwt import verify_jwt
+
 bp = Blueprint('item', __name__, url_prefix='/items')
 
+client = datastore.Client()
 
 env = 'dev'
-
 if env == 'dev':
     url = 'http://127.0.0.1:8080/items/'
 else:
@@ -17,9 +18,16 @@ else:
 
 @bp.route('', methods=['POST', 'GET'])
 def items_get_post():
+    # get the authenticated user
+    decoded_jwt = verify_jwt(request)
+    owner_id = decoded_jwt["sub"]
+    owner_email = decoded_jwt["email"]
+
+    # add a new item
     if request.method == 'POST':
         now = str(datetime.datetime.now())
         content = request.get_json()
+
         new_item = datastore.entity.Entity(key=client.key(constants.items))
         new_item.update(
             {
@@ -27,6 +35,8 @@ def items_get_post():
                 "quantity": content["quantity"],
                 "price":  content["price"],
                 "category":  content["category"],
+                "owner_id": owner_id,
+                "owner_emaiL": owner_email,
                 "creation_date": now,
                 "last_modified_date": now,
                 "store": None
@@ -41,30 +51,13 @@ def items_get_post():
         new_item["self"] = url + str(new_item.key.id)
         return json.dumps(new_item), 201
 
-    # Get all items
+    # retrieve stores owned by current authenticated user
     elif request.method == 'GET':
+        # fetch the stores in paginated form
         query = client.query(kind=constants.items)
-        q_limit = int(request.args.get('limit', '3'))
-        q_offset = int(request.args.get('offset', '0'))
-        l_iterator = query.fetch(limit=q_limit, offset=q_offset)
-        pages = l_iterator.pages
-        results = list(next(pages))
-        if l_iterator.next_page_token:
-            next_offset = q_offset + q_limit
-            next_url = request.base_url + "?limit=" + \
-                str(q_limit) + "&offset=" + str(next_offset)
-        else:
-            next_url = None
-        for e in results:
-            e["id"] = e.key.id
-        output = {"items": results}
-        if next_url:
-            output["next"] = next_url
-        return json.dumps(output), 200
-
-    else:
-        return 'Method not recognized'
-
+        query.add_filter( 'owner_id', '=', owner_id)
+        results = FetchedResults.fetch_paginated_results(query, constants.items)
+        return json.dumps(results.output), 200
 
 @bp.route('/<id>', methods=['DELETE', 'GET'])
 def items_get_delete(id):
@@ -74,14 +67,14 @@ def items_get_delete(id):
         key = client.key(constants.items, int(id))
         item = client.get(key=key)
         if item:
-            # remove the item from its boat
-            boat_key = client.key(constants.boats, int(item['carrier']['id']))
-            boat = client.get(key=boat_key)
-            if boat:
-                for item in boat['items']:
+            # remove the item from its store
+            store_key = client.key(constants.stores, int(item['store']['id']))
+            store = client.get(key=store_key)
+            if store:
+                for item in store['items']:
                     if item['id'] == int(id):
-                        boat['items'].remove(item)
-                client.put(boat)
+                        store['items'].remove(item)
+                client.put(store)
 
             # delete the item
             client.delete(key)
