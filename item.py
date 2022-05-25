@@ -5,7 +5,6 @@ from google.cloud import datastore
 import json
 import constants
 client = datastore.Client()
-# from routes import verifyJWT
 bp = Blueprint('item', __name__, url_prefix='/items')
 
 
@@ -18,12 +17,6 @@ else:
 
 @bp.route('', methods=['POST', 'GET'])
 def items_get_post():
-        # verify the token
-    # try:
-    #     jwt_payload = verifyJWT.verify_jwt(request)
-    # except: 
-    #     return 'Invalid token!', 400
-    # Add an item
     if request.method == 'POST':
         now = str(datetime.datetime.now())
         content = request.get_json()
@@ -36,7 +29,7 @@ def items_get_post():
                 "category":  content["category"],
                 "creation_date": now,
                 "last_modified_date": now,
-                "store:": content["store"]
+                "store": None
             }
         )
         client.put(new_item)
@@ -96,7 +89,7 @@ def items_get_delete(id):
         else:
             return {"Error": "No item with this item_id exists"}, 404
 
-    # Get a item by id
+    # Get an item by id
     elif request.method == 'GET':
         if id == 'null':
             return 200

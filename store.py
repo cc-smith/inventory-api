@@ -20,17 +20,12 @@ else:
 #Get all stores and add a new store
 @bp.route('', methods=['POST', 'GET'])
 def stores_get_post():
-    # verify the token
-    # try:
-    #     jwt_payload = verifyJWT.verify_jwt(request)
-    # except: 
-    #     return 'Invalid token!', 400
 
-    # Add a new store
+    # add new store
     if request.method == 'POST':
-        # add new store
-        
-        content = request.get_json();
+        content = request.get_json()
+        print("\n\nREQUEST:", content)
+
         now = str(datetime.datetime.now())
         new_store = datastore.entity.Entity(key=client.key(constants.stores))
         new_store.update(
@@ -41,8 +36,6 @@ def stores_get_post():
                 "creation_date": now,
                 "last_modified_date": now,
                 "items": [],
-                # "owner": jwt_payload["sub"],
-                # "owner_email": jwt_payload["email"]
             }
         )
         client.put(new_store)
@@ -82,21 +75,17 @@ def stores_put_delete_get(id):
     # Edit a store
     if request.method == 'PATCH':
         content = request.get_json()
-        # error, not enough attributes for store
-        if len(content) < 3:
-            error_message = {
-                "Error": "The request object is missing at least one of the required attributes"
-            }
-            return error_message, 400
         store_key = client.key(constants.stores, int(id))
         store = client.get(key=store_key)
         # update the store information
         if store:
+            now = str(datetime.datetime.now())
             store.update(
                 {
-                    "name": content["name"],
-                    "type": content["type"],
-                    "length": content["length"]
+                "name": content["name"],
+                "type": content["type"],
+                "location": content["location"],
+                "last_modified_date": now,
                 }
             )
             client.put(store)
@@ -119,7 +108,7 @@ def stores_put_delete_get(id):
             for item in store['items']:
                 item_key = client.key(constants.items, int(item['id']))
                 item = client.get(key=item_key)
-                item.update({"carrier": None})
+                item.update({"store": None})
                 client.put(item)
 
             client.delete(store_key)
@@ -161,8 +150,8 @@ def items_put_delete(item_id, store_id):
             return {"Error": "The specified store and/or item does not exist"}, 404
 
         # error, already a store in the item
-        elif item["carrier"]:
-            return {"Error": "The item is already itemed on another store"}, 403
+        elif item["store"]:
+            return {"Error": "The item is already in another store"}, 403
 
         # add the store to the item
         else:
@@ -178,8 +167,9 @@ def items_put_delete(item_id, store_id):
             # update the store's item
             store['items'].append(item_object)
             client.put(store)
-            # upate the item's carrier
-            item.update({"carrier": store_object})
+
+            # upate the item's store
+            item.update({"store": store_object})
             client.put(item)
 
             return '', 204
@@ -206,9 +196,9 @@ def items_put_delete(item_id, store_id):
         if flag is False:
             return {"Error": "No store with this store_id is itemed with the item with this item_id"}, 404
 
-        # check item is assined to this store
-        if item["carrier"]["id"] != int(store_id):
-            return {"Error": "No store with this store_id is at the item with this item_id"}, 404
+        # check item is assigned to this store
+        if item["store"]["id"] != int(store_id):
+            return {"Error": "No store with this store_id contains this item with this item_id"}, 404
         
         else:
             # remove store from item
@@ -221,8 +211,6 @@ def items_put_delete(item_id, store_id):
                     store['items'].remove(item)
             client.put(store)
             return '', 204
-    else:
-        return 'Method not recognized'
 
 @bp.route('/<store_id>/items', methods=['GET'])
 def items_get(store_id):

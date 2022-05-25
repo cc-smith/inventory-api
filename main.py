@@ -1,5 +1,5 @@
 from google.cloud import datastore
-from flask import Flask, request, jsonify, _request_ctx_stack
+from flask import Flask, request, jsonify, _request_ctx_stack, g
 import requests
 import store, item, user
 from functools import wraps
@@ -67,15 +67,12 @@ def handle_auth_error(ex):
     response.status_code = ex.status_code
     return response
 
-
-
 # Verify the JWT in the request's Authorization header
 @app.before_request
 def verify_jwt():
-    # Default this to whatever you'd like.
-    require_auth = True
 
-    # You can handle 404s differently here if you'd like.
+    # exclude jwt verification for certain routes
+    require_auth = True
     if request.endpoint in app.view_functions:
         view_func = app.view_functions[request.endpoint]
         require_auth = not hasattr(view_func, '_exclude_from_auth')
@@ -137,7 +134,7 @@ def verify_jwt():
                             "description":
                                 "Unable to parse authentication"
                                 " token."}, 401)
-
+      
         return payload
     else:
         raise AuthError({"code": "no_rsa_key",
