@@ -5,7 +5,7 @@ import json
 
 from . import constants
 from .queryResults import QueryResults
-from .JWTtest import JwtTest
+from .jwtToken import JwtToken
 
 bp = Blueprint('item', __name__, url_prefix='/items')
 
@@ -28,16 +28,16 @@ def validate_header():
 
 @bp.route('', methods=['POST', 'GET'])
 def items_get_post():
-    # get the authenticated user
-    jwt = JwtTest.verify_jwt(request)
-    if jwt.error:
-        return jwt.error
+    ## get the authenticated user
+    jwt_payload = JwtToken.verify_jwt(request)
+    if jwt_payload.error:
+        return jwt_payload.error
 
     # retrieve stores owned by current authenticated user
     if request.method == 'GET':
         # fetch the stores in paginated form
         query = client.query(kind=constants.items)
-        query.add_filter( 'owner_id', '=', JwtTest.owner_id)
+        query.add_filter( 'owner_id', '=', jwt_payload.owner_id)
         results = QueryResults.paginate_results(query, constants.items)
         return json.dumps(results.output), 200
 
@@ -52,8 +52,8 @@ def items_get_post():
                 "quantity": content["quantity"],
                 "price":  content["price"],
                 "category":  content["category"],
-                "owner_id": JwtTest.owner_id,
-                "owner_emaiL": JwtTest.owner_email,
+                "owner_id": jwt_payload.owner_id,
+                "owner_emaiL": jwt_payload.owner_email,
                 "creation_date": now,
                 "last_modified_date": now,
                 "store": None
@@ -73,10 +73,10 @@ def items_get_post():
 
 @bp.route('/<id>', methods=['GET', 'PATCH', 'PUT', 'DELETE'])
 def stores_put_patch_delete_get(id):
-    # get the authenticated user
-    jwt = JwtTest.verify_jwt(request)
-    if jwt.error:
-        return jwt.error
+    ## get the authenticated user
+    jwt_payload = JwtToken.verify_jwt(request)
+    if jwt_payload.error:
+        return jwt_payload.error
 
     # fetch the item object
     item_key = client.key(constants.items, int(id))
@@ -84,14 +84,18 @@ def stores_put_patch_delete_get(id):
     if not item:
         return {"Error": "No item with this item id exists"}, 404
 
+    # verify that the current user has access to this entity
+    if jwt_payload.owner_id != item["owner_id"]:
+        return 'Access denied', 403
+
     # get item 
     if request.method == 'GET':
         item["id"] = item.key.id
-        item["self"] = item + str(item.key.id)
+        item["self"] = url + str(item.key.id)
         return json.dumps(item), 200
 
     # edit an item
-    elif request.method == 'PATCH':
+    elif request.method == 'PUT':
         content = request.get_json()
         now = str(datetime.datetime.now())
         item.update(
@@ -105,10 +109,10 @@ def stores_put_patch_delete_get(id):
         )
         client.put(item)
         item["id"] = item.key.id
-        return json.dumps(item), 200
+        return json.dumps(item), 201
 
     # replace item attributes
-    elif request.method == 'PUT':
+    elif request.method == 'PATCH':
         content = request.get_json()
         for attribute in content:
             item.update({attribute: content[attribute]}
@@ -126,7 +130,7 @@ def stores_put_patch_delete_get(id):
             store = client.get(key=store_key)
             
             # remove item from store's list of items
-            match = next(item for item in store['items'] if item['id'] == int(id))
+            match = next(item for item in store['items'] if item['names'] == int(id))
             store['items'].remove(match)
             client.put(store)
 

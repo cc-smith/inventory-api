@@ -25,7 +25,7 @@ DOMAIN = env.get("DOMAIN")
 ALGORITHMS = ["RS256"]
 
 
-class JwtTest:
+class JwtToken:
     def __init__(self, request, owner_id=None, owner_email=None, error=None):
         self.request = request
         self.owner_id = owner_id
@@ -34,26 +34,26 @@ class JwtTest:
 
     @classmethod
     # Verify the JWT in the request's Authorization header
-    def verify_jwt(cls, request):
+    def verify_jwt(cls, request, owner_id=None, owner_email=None, error=None):
 
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization'].split()
             token = auth_header[1]
         else:
             error = {"code": "no auth header", "description":"Authorization header is missing"}, 401
-            return (cls, error)
+            return cls(request, owner_id, owner_email, error)
         
         jsonurl = urlopen("https://"+ DOMAIN+"/.well-known/jwks.json")
         jwks = json.loads(jsonurl.read())
         try:
             unverified_header = jwt.get_unverified_header(token)
         except jwt.JWTError:
-            error = {"code": "invalid_headerr", "description": "Invalid header. Use an RS256 signed JWT Access Token"}, 401
-            return (cls, error)
+            error = {"code": "invalid_header", "description": "Invalid header. Use an RS256 signed JWT Access Token"}, 403
+            return cls(request, owner_id, owner_email, error)
 
         if unverified_header["alg"] == "HS256":
-            error = {"code": "invalid_header", "description": "Invalid header. Use an RS256 signed JWT Access Token"}, 401
-            return (cls, error)
+            error = {"code": "invalid_header", "description": "Invalid header. Use an RS256 signed JWT Access Token"}, 403
+            return cls(request, owner_id, owner_email, error)
 
         rsa_key = {}
         for key in jwks["keys"]:
@@ -77,22 +77,22 @@ class JwtTest:
                 )
             except jwt.ExpiredSignatureError:
                 error = {"code": "token_expired",
-                                "description": "token is expired"}, 401
-                return (cls, error)
+                                "description": "token is expired"}, 403
+                return cls(request, owner_id, owner_email, error)
             except jwt.JWTClaimsError:
                 
                 error = {"code": "invalid_claims",
                                 "description":
                                     "incorrect claims,"
-                                    " please check the audience and issuer"}, 401
-                return (cls, error)
+                                    " please check the audience and issuer"}, 403
+                return cls(request, owner_id, owner_email, error)
 
             except Exception:
                 error = {"code": "invalid_header",
                                 "description":
                                     "Unable to parse authentication"
-                                    " token."}, 401
-                return (cls, error)
+                                    " token."}, 403
+                return cls(request, owner_id, owner_email, error)
                 
             owner_id = payload["sub"]
             owner_email = payload["email"]
@@ -101,6 +101,6 @@ class JwtTest:
         else:
             error = {"code": "no_rsa_key",
                                 "description":
-                                    "No RSA key in JWKS"}, 401
-            return (cls, error)
+                                    "No RSA key in JWKS"}, 403
+            return cls(request, owner_id, owner_email, error)
 

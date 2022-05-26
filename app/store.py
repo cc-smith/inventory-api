@@ -5,7 +5,7 @@ from flask import Blueprint, request
 import json
 from . import constants
 from .queryResults import QueryResults
-from .JWTtest import JwtTest
+from .jwtToken import JwtToken
 
 bp = Blueprint('store', __name__, url_prefix='/stores')
 
@@ -31,15 +31,15 @@ def validate_header():
 @bp.route('', methods=['GET', 'POST'])
 def stores_get_post():
     # get the authenticated user
-    jwt_test = JwtTest.verify_jwt(request)
-    if jwt_test.error:
-        return jwt_test.error
+    jwt_payload = JwtToken.verify_jwt(request)
+    if jwt_payload.error:
+        return jwt_payload.error
 
     # retrieve stores owned by current authenticated user
     if request.method == 'GET':
         # fetch the stores in paginated form
         query = client.query(kind=constants.stores)
-        query.add_filter( 'owner_id', '=', jwt_test.owner_id)
+        query.add_filter( 'owner_id', '=', jwt_payload.owner_id)
         results = QueryResults.paginate_results(query, constants.stores)
         return json.dumps(results.output), 200
 
@@ -54,8 +54,8 @@ def stores_get_post():
                 "name": content["name"],
                 "type": content["type"],
                 "location": content["location"],
-                "owner_id": jwt_test.owner_id,
-                "owner_emaiL": jwt_test.owner_email,
+                "owner_id": jwt_payload.owner_id,
+                "owner_emaiL": jwt_payload.owner_email,
                 "creation_date": now,
                 "last_modified_date": now,
                 "items": [],
@@ -76,21 +76,20 @@ def stores_get_post():
 # Edit a store, delete a store, get a store by id
 @bp.route('/<id>', methods=['GET', 'PATCH', 'PUT', 'DELETE'])
 def stores_put_delete_get(id):
+    # get the authenticated user
+    jwt_payload = JwtToken.verify_jwt(request)
+    if jwt_payload.error:
+        return jwt_payload.error
+
     # fetch the store object
     store_key = client.key(constants.stores, int(id))
     store = client.get(key=store_key)
-
-    # get the authenticated user
-    jwt_test = JwtTest.verify_jwt(request)
-    if jwt_test.error:
-        return jwt_test.error
-
-    # verify that the current user has access to this entity
-    if jwt_test.owner_id != store["owner_id"]:
-        return 'Access denied', 403
-
     if not store:
         return {"Error": "No store with this store id exists"}, 404
+
+    # verify that the current user has access to this entity
+    if jwt_payload.owner_id != store["owner_id"]:
+        return 'Access denied', 403
 
     # get store 
     if request.method == 'GET':
@@ -141,21 +140,31 @@ def stores_put_delete_get(id):
 
 @bp.route('/<store_id>/items/<item_id>', methods=['PUT', 'DELETE'])
 def items_put_delete(item_id, store_id):
-    # Put a item on a store
-    if request.method == 'PUT':
-        # get the item
-        item_key = client.key(constants.items, int(item_id))
-        item = client.get(key=item_key)
-        # get the store
-        store_key = client.key(constants.stores, int(store_id))
-        store = client.get(key=store_key)
+    # get the authenticated user
+    jwt_payload = JwtToken.verify_jwt(request)
+    if jwt_payload.error:
+        return jwt_payload.error
 
-        # error, store and/or item not found
-        if not store or not item:
+    # get the item
+    item_key = client.key(constants.items, int(item_id))
+    item = client.get(key=item_key)
+
+    # get the store
+    store_key = client.key(constants.stores, int(store_id))
+    store = client.get(key=store_key)
+
+    # error, store or item does not exist
+    if not store or not item:
             return {"Error": "The specified store and/or item does not exist"}, 404
 
+    # error, store or item does not belong to the authenticated user
+    if jwt_payload.owner_id != store["owner_id"] or jwt_payload.owner_id != item["owner_id"]:
+        return 'Access denied', 403
+
+    # Put a item on a store
+    if request.method == 'PUT':
         # error, already a store in the item
-        elif item["store"]:
+        if item["store"]:
             return {"Error": "The item is already in another store"}, 403
 
         # add the store to the item
@@ -170,7 +179,7 @@ def items_put_delete(item_id, store_id):
                 "name": store["name"],
                 "self": store_url + str(store.key.id)
             }
-            # update the store's item
+            # update the store's items
             store['items'].append(item_object)
             client.put(store)
 
@@ -182,39 +191,22 @@ def items_put_delete(item_id, store_id):
 
     # remove item from store
     elif request.method == 'DELETE':
-        # get the item
-        item_key = client.key(constants.items, int(item_id))
-        item = client.get(key=item_key)
-        # get the store
-        store_key = client.key(constants.stores, int(store_id))
-        store = client.get(key=store_key)
-
-        # error, store and/or item not found
-        if not store or not item:
-            return {"Error": "No store with this store_id is itemed with the item with this item_id"}, 404
-
-        # check if item is on store
-        flag = False
-        for x in store['items']:
-            if x['id'] == int(item_id):
-                flag = True
-                continue
-        if flag is False:
-            return {"Error": "No store with this store_id is itemed with the item with this item_id"}, 404
+        # check if item is in the store
+        match = next(item for item in store['items'] if item["id"] == int(item_id))
+        if not match:
+            return {"Error": "Item not found in store"}, 404
 
         # check item is assigned to this store
-        if item["store"]["id"] != int(store_id):
-            return {"Error": "No store with this store_id contains this item with this item_id"}, 404
+        elif item["store"]["id"] != int(store_id):
+            return {"Error": "This item is not assigned to this store"}, 404
         
         else:
             # remove store from item
-            item.update({"carrier": None})
+            item.update({"store": None})
             client.put(item)
 
             # remove item from store
-            for item in store['items']:
-                if item['id'] == int(item_id):
-                    store['items'].remove(item)
+            store['items'].remove(match)
             client.put(store)
             return '', 204
     else:
@@ -233,10 +225,9 @@ def items_get(store_id):
 
         # get the list of items in the store
         items = []
-        if 'items' in store.keys():
-            for item in store['items']:
-                item_key = client.key(constants.items, int(item['id']))
-                items.append(item_key)
+        for item in store['items']:
+            item_key = client.key(constants.items, int(item['id']))
+            items.append(item_key)
         return {"items": client.get_multi(items)}
     else:
         return '', 405
