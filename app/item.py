@@ -2,9 +2,10 @@ import datetime
 from flask import Blueprint, request
 from google.cloud import datastore
 import json
+
 from . import constants
 from .queryResults import QueryResults
-from .verify_jwt import verify_jwt
+from .JWTtest import JwtTest
 
 bp = Blueprint('item', __name__, url_prefix='/items')
 
@@ -17,18 +18,26 @@ if env == 'dev':
 else:
     url = 'https://inventory-api-350817.uc.r.appspot.com/items/'
 
+# validate header
+@bp.before_request
+def validate_header():
+    allowed_mimetypes = ['application/json', '']
+    if str(request.accept_mimetypes) != "*/*":
+        if request.accept_mimetypes not in allowed_mimetypes:
+            return {"Error": "Not Acceptable"}, 406
+
 @bp.route('', methods=['POST', 'GET'])
 def items_get_post():
     # get the authenticated user
-    decoded_jwt = verify_jwt(request)
-    owner_id = decoded_jwt["sub"]
-    owner_email = decoded_jwt["email"]
+    jwt = JwtTest.verify_jwt(request)
+    if jwt.error:
+        return jwt.error
 
     # retrieve stores owned by current authenticated user
     if request.method == 'GET':
         # fetch the stores in paginated form
         query = client.query(kind=constants.items)
-        query.add_filter( 'owner_id', '=', owner_id)
+        query.add_filter( 'owner_id', '=', JwtTest.owner_id)
         results = QueryResults.paginate_results(query, constants.items)
         return json.dumps(results.output), 200
 
@@ -43,8 +52,8 @@ def items_get_post():
                 "quantity": content["quantity"],
                 "price":  content["price"],
                 "category":  content["category"],
-                "owner_id": owner_id,
-                "owner_emaiL": owner_email,
+                "owner_id": JwtTest.owner_id,
+                "owner_emaiL": JwtTest.owner_email,
                 "creation_date": now,
                 "last_modified_date": now,
                 "store": None
@@ -58,9 +67,17 @@ def items_get_post():
         new_item["id"] = new_item.key.id
         new_item["self"] = url + str(new_item.key.id)
         return json.dumps(new_item), 201
+    
+    else:
+        return '', 405
 
 @bp.route('/<id>', methods=['GET', 'PATCH', 'PUT', 'DELETE'])
 def stores_put_patch_delete_get(id):
+    # get the authenticated user
+    jwt = JwtTest.verify_jwt(request)
+    if jwt.error:
+        return jwt.error
+
     # fetch the item object
     item_key = client.key(constants.items, int(id))
     item = client.get(key=item_key)
@@ -115,6 +132,9 @@ def stores_put_patch_delete_get(id):
 
         client.delete(item_key)
         return '', 204
+    
+    else:
+        return '', 405
 
     
 
