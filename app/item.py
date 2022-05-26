@@ -3,12 +3,13 @@ from flask import Blueprint, request
 from google.cloud import datastore
 import json
 from . import constants
-from .fetchedResults import FetchedResults
+from .queryResults import QueryResults
 from .verify_jwt import verify_jwt
 
 bp = Blueprint('item', __name__, url_prefix='/items')
 
 client = datastore.Client()
+now = str(datetime.datetime.now())
 
 env = 'dev'
 if env == 'dev':
@@ -23,9 +24,16 @@ def items_get_post():
     owner_id = decoded_jwt["sub"]
     owner_email = decoded_jwt["email"]
 
+    # retrieve stores owned by current authenticated user
+    if request.method == 'GET':
+        # fetch the stores in paginated form
+        query = client.query(kind=constants.items)
+        query.add_filter( 'owner_id', '=', owner_id)
+        results = QueryResults.paginate_results(query, constants.items)
+        return json.dumps(results.output), 200
+
     # add a new item
-    if request.method == 'POST':
-        now = str(datetime.datetime.now())
+    elif request.method == 'POST':
         content = request.get_json()
 
         new_item = datastore.entity.Entity(key=client.key(constants.items))
@@ -51,51 +59,66 @@ def items_get_post():
         new_item["self"] = url + str(new_item.key.id)
         return json.dumps(new_item), 201
 
-    # retrieve stores owned by current authenticated user
-    elif request.method == 'GET':
-        # fetch the stores in paginated form
-        query = client.query(kind=constants.items)
-        query.add_filter( 'owner_id', '=', owner_id)
-        results = FetchedResults.fetch_paginated_results(query, constants.items)
-        return json.dumps(results.output), 200
+@bp.route('/<id>', methods=['GET', 'PATCH', 'PUT', 'DELETE'])
+def stores_put_patch_delete_get(id):
+    # fetch the item object
+    item_key = client.key(constants.items, int(id))
+    item = client.get(key=item_key)
+    if not item:
+        return {"Error": "No item with this item id exists"}, 404
 
-@bp.route('/<id>', methods=['DELETE', 'GET'])
-def items_get_delete(id):
+    # get item 
+    if request.method == 'GET':
+        item["id"] = item.key.id
+        item["self"] = item + str(item.key.id)
+        return json.dumps(item), 200
 
-    # delete a item
-    if request.method == 'DELETE':
-        key = client.key(constants.items, int(id))
-        item = client.get(key=key)
-        if item:
-            # remove the item from its store
+    # edit an item
+    elif request.method == 'PATCH':
+        content = request.get_json()
+        now = str(datetime.datetime.now())
+        item.update(
+             {
+                "name": content["name"],
+                "quantity": content["quantity"],
+                "price":  content["price"],
+                "category":  content["category"],
+                "last_modified_date": now,
+            }
+        )
+        client.put(item)
+        item["id"] = item.key.id
+        return json.dumps(item), 200
+
+    # replace item attributes
+    elif request.method == 'PUT':
+        content = request.get_json()
+        for attribute in content:
+            item.update({attribute: content[attribute]}
+        )
+        client.put(item)
+        item["id"] = item.key.id
+        return json.dumps(item), 200
+
+    # delete item
+    elif request.method == 'DELETE':
+        # remove relationship with store
+        if item['store']:
+            # get item's store
             store_key = client.key(constants.stores, int(item['store']['id']))
             store = client.get(key=store_key)
-            if store:
-                for item in store['items']:
-                    if item['id'] == int(id):
-                        store['items'].remove(item)
-                client.put(store)
+            
+            # remove item from store's list of items
+            match = next(item for item in store['items'] if item['id'] == int(id))
+            store['items'].remove(match)
+            client.put(store)
 
-            # delete the item
-            client.delete(key)
-            return '', 204
-        else:
-            return {"Error": "No item with this item_id exists"}, 404
+        client.delete(item_key)
+        return '', 204
 
-    # Get an item by id
-    elif request.method == 'GET':
-        if id == 'null':
-            return 200
-        item_key = client.key(constants.items, int(id))
-        item = client.get(key=item_key)
-        if item:
-            item["id"] = item.key.id
-            item["self"] = url + str(item.key.id)
-            return json.dumps(item), 200
-        # error, no item with this id
-        else:
-            return {"Error": "No item with this item_id exists"}, 404
-    else:
-        return 'Method not recognized'
+    
+
+
+
 
 

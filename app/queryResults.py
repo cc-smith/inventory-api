@@ -1,14 +1,14 @@
 from flask import request
 
 
-class FetchedResults:
+class QueryResults:
     def __init__(self, query, object_type, output=None):
         self.query = query
         self.object_type = object_type
         self.output = output
 
     @classmethod
-    def fetch_paginated_results(cls, query, object_type):
+    def paginate_results(cls, query, object_type):
         q_limit = int(request.args.get('limit', '5'))
         q_offset = int(request.args.get('offset', '0'))
         l_iterator = query.fetch(limit= q_limit, offset=q_offset)

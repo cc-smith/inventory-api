@@ -14,9 +14,8 @@ def exclude_from_auth(func):
     return func
 
 @bp.route('', methods=['GET', 'POST'])
-@exclude_from_auth  # do not require jwt verification for this route
 def get_users():
-    # verify the token and get the requiest body
+    # get all users
     if request.method == 'GET':
         query = client.query(kind='users')
         results = list(query.fetch())
@@ -31,7 +30,7 @@ def get_users():
         query.add_filter("sub", "=", content['sub'])
         results = list(query.fetch())
         if results:
-            return '', 200
+            return 'User already exists', 404
 
         # add new user
         new_user = datastore.entity.Entity(key=client.key(constants.users))

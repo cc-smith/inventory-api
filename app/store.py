@@ -3,7 +3,7 @@ from google.cloud import datastore
 from flask import Blueprint, request
 import json
 from . import constants
-from .fetchedResults import FetchedResults
+from .queryResults import QueryResults
 from .verify_jwt import verify_jwt
 
 bp = Blueprint('store', __name__, url_prefix='/stores')
@@ -19,13 +19,21 @@ else:
     item_url = 'https://inventory-api-350817.uc.r.appspot.com/items/'
     
 #Get all stores and add a new store
-@bp.route('', methods=['POST', 'GET'])
+@bp.route('', methods=['GET', 'POST'])
 def stores_get_post():
-
+    
     # get the authenticated user
     decoded_jwt = verify_jwt(request)
     owner_id = decoded_jwt["sub"]
     owner_email = decoded_jwt["email"]
+
+    # retrieve stores owned by current authenticated user
+    if request.method == 'GET':
+        # fetch the stores in paginated form
+        query = client.query(kind=constants.stores)
+        query.add_filter( 'owner_id', '=', owner_id)
+        results = QueryResults.paginate_results(query, constants.stores)
+        return json.dumps(results.output), 200
 
     # add new store
     if request.method == 'POST':
@@ -54,79 +62,59 @@ def stores_get_post():
         new_store["self"] = store_url + str(new_store.key.id)
         return json.dumps(new_store), 201
 
-    # retrieve stores owned by current authenticated user
-    elif request.method == 'GET':
-        # fetch the stores in paginated form
-        query = client.query(kind=constants.stores)
-        query.add_filter( 'owner_id', '=', owner_id)
-        results = FetchedResults.fetch_paginated_results(query, constants.stores)
-        return json.dumps(results.output), 200
-
-
 # Edit a store, delete a store, get a store by id
-@bp.route('/<id>', methods=['PATCH', 'DELETE', 'GET'])
+@bp.route('/<id>', methods=['GET', 'PATCH', 'PUT', 'DELETE'])
 def stores_put_delete_get(id):
-    # Edit a store
-    if request.method == 'PATCH':
-        content = request.get_json()
-        store_key = client.key(constants.stores, int(id))
-        store = client.get(key=store_key)
-        # update the store information
-        if store:
-            now = str(datetime.datetime.now())
-            store.update(
-                {
-                "name": content["name"],
-                "type": content["type"],
-                "location": content["location"],
-                "last_modified_date": now,
-                }
-            )
-            client.put(store)
-            # return the edited store object
-            store["id"] = store.key.id
-            return json.dumps(store), 200
+    # fetch the store object
+    store_key = client.key(constants.stores, int(id))
+    store = client.get(key=store_key)
 
-        # store id not found
-        else:
-            error_message = {"Error": "No store with this store_id exists"}
-            return error_message, 404
+    if not store:
+        return {"Error": "No store with this store id exists"}, 404
+
+    # get store 
+    if request.method == 'GET':
+        store["id"] = store.key.id
+        store["self"] = store_url + str(store.key.id)
+        return json.dumps(store), 200
+
+    # edit a store
+    elif request.method == 'PUT':
+        content = request.get_json()
+        now = str(datetime.datetime.now())
+        store.update(
+            {
+            "name": content["name"],
+            "type": content["type"],
+            "location": content["location"],
+            "last_modified_date": now,
+            }
+        )
+        client.put(store)
+        store["id"] = store.key.id
+        return json.dumps(store), 201
+
+    # replace store attributes
+    elif request.method == 'PATCH':
+        content = request.get_json()
+        for attribute in content:
+            store.update({attribute: content[attribute]}
+        )
+        client.put(store)
+        store["id"] = store.key.id
+        return json.dumps(store), 200
 
     # delete store
     elif request.method == 'DELETE':
-        # get the store
-        store_key = client.key(constants.stores, int(id))
-        store = client.get(key=store_key)
-        if store:
-            # update the items' store
-            for item in store['items']:
-                item_key = client.key(constants.items, int(item['id']))
-                item = client.get(key=item_key)
-                item.update({"store": None})
-                client.put(item)
+        # remove any items currently in the store
+        for item in store['items']:
+            item_key = client.key(constants.items, int(item['id']))
+            item = client.get(key=item_key)
+            item.update({"store": None})
+            client.put(item)
 
-            client.delete(store_key)
-            return '', 204
-        # store id not found
-        else:
-            return {"Error": "No store with this store_id exists"}, 404
-
-    # get store by id
-    elif request.method == 'GET':
-        if id == 'null':
-            return 200
-        store_key = client.key(constants.stores, int(id))
-        store = client.get(key=store_key)
-        if store:
-            store["id"] = store.key.id
-            store["self"] = store_url + str(store.key.id)
-            return json.dumps(store), 200
-        # store id not found
-        else:
-            return {"Error": "No store with this store_id exists"}, 404
-    else:
-        return 'Method not recognized'
-
+        client.delete(store_key)
+        return '', 204
 
 @bp.route('/<store_id>/items/<item_id>', methods=['PUT', 'DELETE'])
 def items_put_delete(item_id, store_id):
@@ -216,9 +204,9 @@ def items_get(store_id):
 
         # error, invalid store id
         if not store:
-            return {"Error": "No store with this store_id exists"}, 404
+            return {"Error": "No store with this store id exists"}, 404
 
-        # get the list of items on the store
+        # get the list of items in the store
         items = []
         if 'items' in store.keys():
             for item in store['items']:
