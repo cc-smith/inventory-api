@@ -45,7 +45,7 @@ def callback():
         "name":token["userinfo"]["email"],
         "sub": token["userinfo"]["sub"]
     }
-    res = requests.post('http://127.0.0.1:8080/users', json=data)
+    res = requests.post('https://inventory-api-350817.uc.r.appspot.com/users', json=data)
     session["user"] = token
     return redirect("/")
 

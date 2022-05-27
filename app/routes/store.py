@@ -3,22 +3,14 @@ from os import O_WRONLY
 from google.cloud import datastore
 from flask import Blueprint, request
 import json
-from . import constants
-from .queryResults import QueryResults
-from .jwtToken import JwtToken
+from .. import constants
+from ..queryResults import QueryResults
+from ..jwtToken import JwtToken
 
 bp = Blueprint('store', __name__, url_prefix='/stores')
 
 client = datastore.Client()
 
-env = 'dev'
-if env == 'dev':
-    store_url = 'http://127.0.0.1:8080/stores/'
-    item_url = 'http://127.0.0.1:8080/items/'
-else:
-    store_url = 'https://inventory-api-350817.uc.r.appspot.com/stores/'
-    item_url = 'https://inventory-api-350817.uc.r.appspot.com/items/'
-    
 # validate headers
 @bp.before_request
 def validate_header():
@@ -67,7 +59,7 @@ def stores_get_post():
         store_key = client.key(constants.stores, new_store.key.id)
         new_store = client.get(key=store_key)
         new_store["id"] = new_store.key.id
-        new_store["self"] = store_url + str(new_store.key.id)
+        new_store["self"] = constants.stores_url + str(new_store.key.id)
         return json.dumps(new_store), 201
 
     else:
@@ -94,7 +86,7 @@ def stores_put_delete_get(id):
     # get store 
     if request.method == 'GET':
         store["id"] = store.key.id
-        store["self"] = store_url + str(store.key.id)
+        store["self"] = constants.stores_url + str(store.key.id)
         return json.dumps(store), 200
 
     # edit a store
@@ -172,12 +164,12 @@ def items_put_delete(item_id, store_id):
             item_object = {
                 "id": item.key.id,
                 "name": item["name"],
-                "self": item_url + str(item.key.id)
+                "self": constants.items_url + str(item.key.id)
             }
             store_object = {
                 "id": store.key.id,
                 "name": store["name"],
-                "self": store_url + str(store.key.id)
+                "self": constants.stores_url + str(store.key.id)
             }
             # update the store's items
             store['items'].append(item_object)

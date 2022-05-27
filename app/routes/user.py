@@ -2,8 +2,10 @@ from importlib.resources import contents
 from flask import Blueprint, request
 from google.cloud import datastore
 import json
-from . import constants
+from .. import constants
+
 client = datastore.Client()
+
 # from main import verify_jwt
 from os import environ as env
 

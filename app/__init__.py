@@ -41,9 +41,9 @@ def create_app():
 
 
 def register_blueprints(app):
-    from app import store
-    from app import item
-    from app import user
+    from .routes import store
+    from .routes import item
+    from .routes import user
 
     app.register_blueprint(user.bp)
     app.register_blueprint(item.bp)

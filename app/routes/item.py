@@ -3,20 +3,14 @@ from flask import Blueprint, request
 from google.cloud import datastore
 import json
 
-from . import constants
-from .queryResults import QueryResults
-from .jwtToken import JwtToken
+from .. import constants
+from ..queryResults import QueryResults
+from ..jwtToken import JwtToken
 
 bp = Blueprint('item', __name__, url_prefix='/items')
 
 client = datastore.Client()
 now = str(datetime.datetime.now())
-
-env = 'dev'
-if env == 'dev':
-    url = 'http://127.0.0.1:8080/items/'
-else:
-    url = 'https://inventory-api-350817.uc.r.appspot.com/items/'
 
 # validate header
 @bp.before_request
@@ -65,7 +59,7 @@ def items_get_post():
         item_key = client.key(constants.items, new_item.key.id)
         item = client.get(key=item_key)
         new_item["id"] = new_item.key.id
-        new_item["self"] = url + str(new_item.key.id)
+        new_item["self"] = constants.items_url + str(new_item.key.id)
         return json.dumps(new_item), 201
     
     else:
@@ -91,7 +85,7 @@ def stores_put_patch_delete_get(id):
     # get item 
     if request.method == 'GET':
         item["id"] = item.key.id
-        item["self"] = url + str(item.key.id)
+        item["self"] = constants.items_url + str(item.key.id)
         return json.dumps(item), 200
 
     # edit an item
