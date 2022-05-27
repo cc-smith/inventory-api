@@ -26,7 +26,7 @@ def stores_get_post():
     jwt_payload = JwtToken.verify_jwt(request)
     if jwt_payload.error:
         return jwt_payload.error
-
+        
     # retrieve stores owned by current authenticated user
     if request.method == 'GET':
         # fetch the stores in paginated form
@@ -36,7 +36,7 @@ def stores_get_post():
         return json.dumps(results.output), 200
 
     # add new store
-    if request.method == 'POST':
+    elif request.method == 'POST':
         content = request.get_json()
         now = str(datetime.datetime.now())
 
@@ -102,8 +102,14 @@ def stores_put_delete_get(id):
             }
         )
         client.put(store)
+
+        # return the new store object
+        store_key = client.key(constants.stores, store.key.id)
+        store = client.get(key=store_key)
         store["id"] = store.key.id
+        store["self"] = constants.stores_url + str(store.key.id)
         return json.dumps(store), 201
+
 
     # replace store attributes
     elif request.method == 'PATCH':
@@ -220,6 +226,6 @@ def items_get(store_id):
         for item in store['items']:
             item_key = client.key(constants.items, int(item['id']))
             items.append(item_key)
-        return {"items": client.get_multi(items)}
+        return {"items": client.get_multi(items)}, 200
     else:
         return '', 405

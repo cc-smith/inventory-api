@@ -34,8 +34,9 @@ class JwtToken:
 
     @classmethod
     # Verify the JWT in the request's Authorization header
-    def verify_jwt(cls, request, owner_id=None, owner_email=None, error=None):
-
+    def verify_jwt(cls, request):
+        owner_id = ''
+        owner_email = ''
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization'].split()
             token = auth_header[1]
@@ -97,7 +98,7 @@ class JwtToken:
             owner_id = payload["sub"]
             owner_email = payload["email"]
             error = ''
-            return cls(owner_id, owner_email, error)
+            return cls(request, owner_id, owner_email, error)
         else:
             error = {"code": "no_rsa_key",
                                 "description":
